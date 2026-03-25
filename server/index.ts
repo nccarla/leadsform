@@ -39,6 +39,30 @@ async function ensureSchema(): Promise<void> {
     );
   `);
   await pool.query(`
+    CREATE TABLE IF NOT EXISTS audits (
+      id BIGSERIAL PRIMARY KEY,
+      client_name TEXT NOT NULL DEFAULT '',
+      client_email TEXT NOT NULL DEFAULT '',
+      client_phone TEXT NOT NULL DEFAULT '',
+      subject TEXT NOT NULL DEFAULT '',
+      location TEXT NOT NULL DEFAULT '',
+      start_time TIMESTAMPTZ,
+      end_time TIMESTAMPTZ,
+      description TEXT NOT NULL DEFAULT '',
+      validator_source TEXT NOT NULL DEFAULT '',
+      country TEXT NOT NULL DEFAULT '',
+      meeting_day TEXT NOT NULL DEFAULT '',
+      advisor_name TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'pending',
+      reminder_minutes INTEGER NOT NULL DEFAULT 15,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await pool.query(`
+    ALTER TABLE audits
+    ADD COLUMN IF NOT EXISTS advisor_name TEXT NOT NULL DEFAULT '';
+  `);
+  await pool.query(`
     INSERT INTO lead_app_state (id, payload)
     VALUES (1, $1::jsonb)
     ON CONFLICT (id) DO NOTHING;
@@ -51,6 +75,46 @@ app.use(express.json({ limit: '2mb' }));
 
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true });
+});
+
+// Recibe datos de auditoria desde Make y los guarda en PostgreSQL.
+app.post('/api/audit', async (req, res) => {
+  const {
+    nombre, correo, telefono, asunto,
+    ubicacion, fecha_inicio, fecha_fin,
+    descripcion, validador, pais, dia_reunion,
+    asesor,
+  } = (req.body ?? {}) as Record<string, unknown>;
+
+  try {
+    const query = `
+      INSERT INTO audits (
+        client_name, client_email, client_phone, subject,
+        location, start_time, end_time, description,
+        validator_source, country, meeting_day, advisor_name
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+    `;
+
+    await pool.query(query, [
+      String(nombre ?? ''),
+      String(correo ?? ''),
+      String(telefono ?? ''),
+      String(asunto ?? ''),
+      String(ubicacion ?? ''),
+      fecha_inicio ? new Date(String(fecha_inicio)) : null,
+      fecha_fin ? new Date(String(fecha_fin)) : null,
+      String(descripcion ?? ''),
+      String(validador ?? ''),
+      String(pais ?? ''),
+      String(dia_reunion ?? ''),
+      String(asesor ?? ''),
+    ]);
+
+    res.json({ ok: true, message: 'Auditoria registrada correctamente' });
+  } catch (e) {
+    console.error('Error en /api/audit:', e);
+    res.status(500).json({ error: 'Error al registrar auditoria' });
+  }
 });
 
 app.get('/api/state', async (_req, res) => {
@@ -210,7 +274,7 @@ async function main(): Promise<void> {
   await ensureSchema();
   app.listen(PORT, () => {
     console.log(
-      `API PostgreSQL http://localhost:${PORT}  (GET/PUT /api/state, GET /api/history, GET/PUT /api/opportunity)`,
+      `API PostgreSQL http://localhost:${PORT} (GET/PUT /api/state, GET /api/history, GET/PUT /api/opportunity, POST /api/audit)`,
     );
   });
 }
