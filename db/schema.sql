@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS audits (
   country TEXT NOT NULL DEFAULT '',
   meeting_day TEXT NOT NULL DEFAULT '',
   advisor_name TEXT NOT NULL DEFAULT '',
+  advisor_status TEXT NOT NULL DEFAULT 'pending',
   status TEXT NOT NULL DEFAULT 'pending',
   reminder_minutes INTEGER NOT NULL DEFAULT 15,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()

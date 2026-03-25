@@ -53,6 +53,7 @@ async function ensureSchema(): Promise<void> {
       country TEXT NOT NULL DEFAULT '',
       meeting_day TEXT NOT NULL DEFAULT '',
       advisor_name TEXT NOT NULL DEFAULT '',
+      advisor_status TEXT NOT NULL DEFAULT 'pending',
       status TEXT NOT NULL DEFAULT 'pending',
       reminder_minutes INTEGER NOT NULL DEFAULT 15,
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -61,6 +62,10 @@ async function ensureSchema(): Promise<void> {
   await pool.query(`
     ALTER TABLE audits
     ADD COLUMN IF NOT EXISTS advisor_name TEXT NOT NULL DEFAULT '';
+  `);
+  await pool.query(`
+    ALTER TABLE audits
+    ADD COLUMN IF NOT EXISTS advisor_status TEXT NOT NULL DEFAULT 'pending';
   `);
   await pool.query(`
     INSERT INTO lead_app_state (id, payload)
@@ -114,6 +119,34 @@ app.post('/api/audit', async (req, res) => {
   } catch (e) {
     console.error('Error en /api/audit:', e);
     res.status(500).json({ error: 'Error al registrar auditoria' });
+  }
+});
+
+// Actualiza estado del asesor ('accepted' o 'declined') para una auditoria.
+app.patch('/api/audit/:id/status', async (req, res) => {
+  const { id } = req.params;
+  const { status } = (req.body ?? {}) as { status?: unknown };
+
+  if (status !== 'accepted' && status !== 'declined') {
+    res.status(400).json({ error: "status debe ser 'accepted' o 'declined'" });
+    return;
+  }
+
+  try {
+    const result = await pool.query(
+      'UPDATE audits SET advisor_status = $1 WHERE id = $2',
+      [status, id],
+    );
+
+    if (result.rowCount === 0) {
+      res.status(404).json({ error: 'Auditoria no encontrada' });
+      return;
+    }
+
+    res.json({ ok: true, message: `Estado actualizado a ${status}` });
+  } catch (e) {
+    console.error('Error en PATCH /api/audit/:id/status:', e);
+    res.status(500).json({ error: 'Error al actualizar estado' });
   }
 });
 
@@ -274,7 +307,7 @@ async function main(): Promise<void> {
   await ensureSchema();
   app.listen(PORT, () => {
     console.log(
-      `API PostgreSQL http://localhost:${PORT} (GET/PUT /api/state, GET /api/history, GET/PUT /api/opportunity, POST /api/audit)`,
+      `API PostgreSQL http://localhost:${PORT} (GET/PUT /api/state, GET /api/history, GET/PUT /api/opportunity, POST /api/audit, PATCH /api/audit/:id/status)`,
     );
   });
 }
