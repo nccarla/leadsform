@@ -7,7 +7,6 @@ import { downloadHistoryCsv } from './utils/historyCsv';
 import { renderStepper, stepIndexFromTarget } from './ui/stepper';
 import { filterHistoryByOpportunityNumber, renderHistoryTable } from './ui/historyTable';
 import {
-  bindClosingPercentBar,
   queryOpportunityFormElements,
   readOpportunityForm,
   updateClosingPercentBar,
@@ -15,11 +14,26 @@ import {
   type OpportunityFormElements,
 } from './opportunityForm';
 
+function stageAutoClosingPercent(stageIndex: number): number {
+  // 5 etapas: 20/40/60/80/100
+  const pct = (stageIndex + 1) * 20;
+  return Math.min(100, Math.max(0, pct));
+}
+
+function syncClosingPercentToStage(els: Elements, stageIndex: number): void {
+  els.form.closingPercent.value = String(stageAutoClosingPercent(stageIndex));
+  updateClosingPercentBar(els.form);
+}
+
 type Elements = {
   stepper: HTMLElement;
   stageTitle: HTMLElement;
   stageBadge: HTMLElement;
   leadForm: HTMLFormElement;
+  leadGrid: HTMLElement;
+  clientPanel: HTMLDetailsElement;
+  leftStack: HTMLElement;
+  obsBlock: HTMLElement;
   form: OpportunityFormElements;
   historyBody: HTMLElement;
   rowCount: HTMLElement;
@@ -42,6 +56,10 @@ function queryElements(): Elements {
     stageTitle: q('stage-title'),
     stageBadge: q('stage-badge'),
     leadForm: q<HTMLFormElement>('lead-form'),
+    leadGrid: q('lead-grid'),
+    clientPanel: q<HTMLDetailsElement>('client-panel'),
+    leftStack: q('left-stack'),
+    obsBlock: q('obs-block'),
     form: queryOpportunityFormElements(),
     historyBody: q('history-body'),
     rowCount: q('row-count'),
@@ -61,6 +79,44 @@ function persistDraft(els: Elements, state: AppState): AppState {
   };
   saveState(next);
   return next;
+}
+
+type OpportunityDirectory = {
+  opportunityNumber: string;
+  clientName: string;
+  clientEmail: string;
+  clientPhone: string;
+  sellerName: string;
+  updatedAt: string;
+};
+
+let opportunityLookupTimer: ReturnType<typeof setTimeout> | null = null;
+let opportunityLookupLastKey = '';
+
+function fillIfEmpty(input: HTMLInputElement, value: string): void {
+  if (input.value.trim() !== '') return;
+  if (!value.trim()) return;
+  input.value = value;
+}
+
+async function lookupOpportunityAndFill(els: Elements): Promise<void> {
+  const key = els.form.opportunityNumber.value.trim();
+  if (!key) return;
+  if (key === opportunityLookupLastKey) return;
+  opportunityLookupLastKey = key;
+
+  try {
+    const r = await fetch(`/api/opportunity?number=${encodeURIComponent(key)}`);
+    if (!r.ok) return;
+    const d = (await r.json()) as OpportunityDirectory;
+    if (!d || typeof d !== 'object') return;
+    fillIfEmpty(els.form.clientName, d.clientName ?? '');
+    fillIfEmpty(els.form.clientEmail, d.clientEmail ?? '');
+    fillIfEmpty(els.form.clientPhone, d.clientPhone ?? '');
+    fillIfEmpty(els.form.sellerName, d.sellerName ?? '');
+  } catch {
+    /* ignore */
+  }
 }
 
 function updateStagePanel(els: Elements, state: AppState): void {
@@ -133,6 +189,7 @@ function scheduleHistoryPaint(els: Elements, state: AppState): void {
 }
 
 function fullRender(els: Elements, state: AppState): void {
+  syncClosingPercentToStage(els, state.currentStageIndex);
   renderStepper(els.stepper, state.currentStageIndex, stepperPreviousRenderedIndex);
   stepperPreviousRenderedIndex = state.currentStageIndex;
   updateStagePanel(els, state);
@@ -154,10 +211,27 @@ export async function mountApp(): Promise<void> {
   let state: AppState = await loadState();
 
   writeOpportunityForm(els.form, state.draft);
-  updateClosingPercentBar(els.form);
-  bindClosingPercentBar(els.form);
+  syncClosingPercentToStage(els, state.currentStageIndex);
   ensureDefaultDates(els);
   fullRender(els, state);
+
+  const syncObservationsPlacement = () => {
+    // Abierto: Observaciones a ancho completo debajo de ambas columnas.
+    if (els.clientPanel.open) {
+      if (els.obsBlock.parentElement !== els.leadGrid) {
+        els.leadGrid.appendChild(els.obsBlock);
+      }
+      els.obsBlock.classList.add('md:col-span-2');
+      return;
+    }
+    // Cerrado: Observaciones debajo de Clientes (columna izquierda).
+    if (els.obsBlock.parentElement !== els.leftStack) {
+      els.leftStack.appendChild(els.obsBlock);
+    }
+    els.obsBlock.classList.remove('md:col-span-2');
+  };
+  syncObservationsPlacement();
+  els.clientPanel.addEventListener('toggle', syncObservationsPlacement);
 
   const formInputs: HTMLElement[] = [
     els.form.clientName,
@@ -173,7 +247,6 @@ export async function mountApp(): Promise<void> {
     els.form.opportunityStartDate,
     els.form.opportunityClosingDate,
     els.form.openActivitiesCount,
-    els.form.closingPercent,
     els.form.potentialAmount,
     els.form.relatedDocClass,
     els.form.relatedDocNumber,
@@ -188,6 +261,19 @@ export async function mountApp(): Promise<void> {
     el.addEventListener('input', onDraftChange);
     el.addEventListener('change', onDraftChange);
   }
+
+  // Autocompletar cliente/vendedor por nº de oportunidad (debounce).
+  const scheduleOpportunityLookup = () => {
+    if (opportunityLookupTimer) clearTimeout(opportunityLookupTimer);
+    opportunityLookupTimer = setTimeout(() => {
+      opportunityLookupTimer = null;
+      void lookupOpportunityAndFill(els).then(() => {
+        state = persistDraft(els, state);
+      });
+    }, 420);
+  };
+  els.form.opportunityNumber.addEventListener('input', scheduleOpportunityLookup);
+  els.form.opportunityNumber.addEventListener('change', scheduleOpportunityLookup);
 
   els.historyOpportunitySearch.addEventListener('input', () => scheduleHistoryPaint(els, state));
   els.historyOpportunitySearch.addEventListener('search', () => void paintHistoryTable(els, state));
@@ -206,6 +292,7 @@ export async function mountApp(): Promise<void> {
     if (idx === null) return;
     state = persistDraft(els, state);
     state = { ...state, currentStageIndex: idx };
+    syncClosingPercentToStage(els, state.currentStageIndex);
     saveState(state);
     fullRender(els, state);
   });
@@ -213,6 +300,9 @@ export async function mountApp(): Promise<void> {
   els.leadForm.addEventListener('submit', (e) => {
     e.preventDefault();
     if (!els.leadForm.reportValidity()) return;
+
+    // % cierre automático en función de la etapa actual.
+    syncClosingPercentToStage(els, state.currentStageIndex);
 
     const snapshot = cloneSnapshot(readOpportunityForm(els.form));
     const stage = STAGES[state.currentStageIndex];
@@ -236,6 +326,22 @@ export async function mountApp(): Promise<void> {
     }
 
     saveState(state);
+
+    // Guarda directorio para autocompletar por nº oportunidad.
+    if (snapshot.opportunityNumber.trim()) {
+      void fetch('/api/opportunity', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          opportunityNumber: snapshot.opportunityNumber.trim(),
+          clientName: snapshot.clientName,
+          clientEmail: snapshot.clientEmail,
+          clientPhone: snapshot.clientPhone,
+          sellerName: snapshot.sellerName,
+        }),
+      }).catch(() => void 0);
+    }
+
     writeOpportunityForm(els.form, state.draft);
     updateClosingPercentBar(els.form);
     fullRender(els, state);

@@ -121,6 +121,23 @@
         >
           <div class="ifon-step-wrap rounded-sm px-3 py-5 sm:px-5">
             <div id="stepper" class="w-max min-w-0"></div>
+            <div class="mt-4 min-w-0">
+              <div class="flex items-center justify-between gap-4">
+                <span class="text-[10px] font-extrabold uppercase tracking-widest text-ink-700">Probabilidad de cierre</span>
+                <span
+                  class="text-sm font-extrabold text-brand-red tabular-nums"
+                  id="closing-percent-label"
+                  aria-live="polite"
+                ></span>
+              </div>
+              <div class="mt-2 h-3 overflow-hidden rounded-sm border border-ink-300 bg-ink-100">
+                <div
+                  id="closing-percent-bar"
+                  class="h-full rounded-sm bg-gradient-to-r from-brand-red via-brand-redHi to-brand-navy transition-all duration-200"
+                  style="width: 0%"
+                ></div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -139,12 +156,18 @@
         <div class="p-5 sm:p-7 sm:pt-6">
 
         <form id="lead-form" class="min-w-0 space-y-8 sm:space-y-10">
-          <div class="grid min-w-0 gap-6 md:grid-cols-2 md:gap-8 lg:gap-10">
-            <!-- Columna izquierda: cliente y vendedor -->
-            <div class="form-well">
-              <h3 class="border-b-2 border-brand-navy pb-2 text-xs font-extrabold uppercase tracking-widest text-brand-navy">
-                Cliente y vendedor
-              </h3>
+          <div
+            id="lead-grid"
+            class="lead-grid grid min-w-0 items-start gap-6 md:grid-cols-2 md:gap-8 lg:gap-10"
+          >
+            <!-- Columna izquierda: cliente y vendedor (+ Observaciones cuando está oculto) -->
+            <div id="left-stack" class="min-w-0 space-y-6">
+              <details id="client-panel" class="form-well" open>
+                  <summary class="flex cursor-pointer list-none items-center justify-between gap-3 border-b-2 border-brand-navy pb-2 text-xs font-extrabold uppercase tracking-widest text-brand-navy">
+                    <span>Cliente y vendedor</span>
+                    <span class="text-[10px] font-extrabold uppercase tracking-widest text-ink-500">Mostrar / ocultar</span>
+                  </summary>
+                  <div class="form-well-body">
 
               <label class="block">
                 <span class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-700">Nombre del cliente</span>
@@ -228,10 +251,12 @@
                 />
                 Visualizar en moneda del sistema
               </label>
+                </div>
+              </details>
             </div>
 
             <!-- Columna derecha: oportunidad -->
-            <div class="form-well">
+            <div id="document-panel" class="form-well doc-panel">
               <h3 class="border-b-2 border-brand-navy pb-2 text-xs font-extrabold uppercase tracking-widest text-brand-navy">Datos del documento</h3>
 
               <label class="block">
@@ -294,28 +319,7 @@
                 />
               </label>
 
-              <div class="space-y-2">
-                <div class="flex items-center justify-between gap-4">
-                  <span class="text-xs font-bold uppercase tracking-wide text-ink-700">% de cierre</span>
-                  <span class="text-sm font-extrabold text-brand-red tabular-nums" id="closing-percent-label" aria-live="polite"></span>
-                </div>
-                <input
-                  type="number"
-                  id="closing-percent"
-                  min="0"
-                  max="100"
-                  step="1"
-                  class="input-industrial"
-                  placeholder="0 – 100"
-                />
-                <div class="h-3 overflow-hidden rounded-sm border border-ink-300 bg-ink-100">
-                  <div
-                    id="closing-percent-bar"
-                    class="h-full rounded-sm bg-gradient-to-r from-brand-red via-brand-redHi to-brand-navy transition-all duration-200"
-                    style="width: 0%"
-                  ></div>
-                </div>
-              </div>
+              <input type="hidden" id="closing-percent" name="closingPercent" value="0" />
 
               <label class="block">
                 <span class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-700">Monto potencial</span>
@@ -350,22 +354,26 @@
                 </label>
               </div>
             </div>
-          </div>
 
-          <div class="rounded-sm border-2 border-dashed border-ink-300 bg-white p-4 sm:p-5">
-            <label class="block">
-              <span class="mb-2 block text-xs font-bold uppercase tracking-wide text-ink-700"
-                >Observaciones <span class="text-brand-red" title="Campo obligatorio">*</span></span
-              >
-              <textarea
-                id="opportunity-notes"
-                name="opportunityNotes"
-                rows="4"
-                required
-                class="input-industrial resize-y min-h-[7rem]"
-                placeholder="Describe el contexto o acuerdos (obligatorio)"
-              ></textarea>
-            </label>
+            <div
+              id="obs-block"
+              class="obs-block md:col-span-2 rounded-sm border-2 border-dashed border-ink-300 bg-white p-4 sm:p-5"
+            >
+              <label class="block">
+                <span class="mb-2 block text-xs font-bold uppercase tracking-wide text-ink-700"
+                  >Observaciones <span class="text-brand-red" title="Campo obligatorio">*</span></span
+                >
+                <textarea
+                  id="opportunity-notes"
+                  name="opportunityNotes"
+                  rows="4"
+                  required
+                  class="input-industrial resize-y min-h-[7rem]"
+                  placeholder="Describe el contexto o acuerdos (obligatorio)"
+                ></textarea>
+              </label>
+            </div>
+
           </div>
 
           <div class="border-t-2 border-ink-300 bg-gradient-to-b from-brand-surface/40 to-white pt-6 sm:pt-8">

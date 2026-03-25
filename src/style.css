@@ -102,6 +102,25 @@
     box-shadow: inset 0 1px 0 0 rgb(255 255 255 / 0.9);
   }
 
+  /* Panel “Datos del documento”: más alto sin tocar otros paneles */
+  .doc-panel {
+    min-height: 0;
+    align-self: stretch;
+  }
+  @media (max-width: 767.98px) {
+    .doc-panel {
+      min-height: 0;
+    }
+  }
+
+  /* Details (colapsable) para Cliente y vendedor */
+  details.form-well > summary::-webkit-details-marker {
+    display: none;
+  }
+  .form-well-body > * + * {
+    margin-top: 1.25rem;
+  }
+
   .chip {
     display: inline-flex;
     align-items: center;
@@ -244,3 +263,5 @@
     animation: row-in 0.2s ease-out forwards;
   }
 }
+
+/* Observaciones se reubica por JS al abrir/cerrar Cliente */
