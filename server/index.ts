@@ -104,9 +104,10 @@ app.post('/api/audit', async (req, res) => {
         location, start_time, end_time, description,
         validator_source, country, meeting_day, advisor_name
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+      RETURNING id, client_id
     `;
 
-    await pool.query(query, [
+    const result = await pool.query(query, [
       String(client_id ?? ''),
       String(nombre ?? ''),
       String(correo ?? ''),
@@ -122,7 +123,13 @@ app.post('/api/audit', async (req, res) => {
       String(asesor ?? ''),
     ]);
 
-    res.json({ ok: true, message: 'Auditoria registrada correctamente' });
+    const row = result.rows[0] as { id: number; client_id: string };
+    res.json({
+      ok: true,
+      message: 'Auditoria registrada correctamente',
+      id: row?.id,
+      client_id: row?.client_id,
+    });
   } catch (e) {
     console.error('Error en /api/audit:', e);
     res.status(500).json({ error: 'Error al registrar auditoria' });
