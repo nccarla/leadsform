@@ -41,6 +41,7 @@ async function ensureSchema(): Promise<void> {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS audits (
       id BIGSERIAL PRIMARY KEY,
+      client_id TEXT NOT NULL DEFAULT '',
       client_name TEXT NOT NULL DEFAULT '',
       client_email TEXT NOT NULL DEFAULT '',
       client_phone TEXT NOT NULL DEFAULT '',
@@ -58,6 +59,10 @@ async function ensureSchema(): Promise<void> {
       reminder_minutes INTEGER NOT NULL DEFAULT 15,
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
+  `);
+  await pool.query(`
+    ALTER TABLE audits
+    ADD COLUMN IF NOT EXISTS client_id TEXT NOT NULL DEFAULT '';
   `);
   await pool.query(`
     ALTER TABLE audits
@@ -85,6 +90,7 @@ app.get('/api/health', (_req, res) => {
 // Recibe datos de auditoria desde Make y los guarda en PostgreSQL.
 app.post('/api/audit', async (req, res) => {
   const {
+    client_id,
     nombre, correo, telefono, asunto,
     ubicacion, fecha_inicio, fecha_fin,
     descripcion, validador, pais, dia_reunion,
@@ -94,13 +100,14 @@ app.post('/api/audit', async (req, res) => {
   try {
     const query = `
       INSERT INTO audits (
-        client_name, client_email, client_phone, subject,
+        client_id, client_name, client_email, client_phone, subject,
         location, start_time, end_time, description,
         validator_source, country, meeting_day, advisor_name
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
     `;
 
     await pool.query(query, [
+      String(client_id ?? ''),
       String(nombre ?? ''),
       String(correo ?? ''),
       String(telefono ?? ''),
@@ -146,6 +153,47 @@ app.patch('/api/audit/:id/status', async (req, res) => {
     res.json({ ok: true, message: `Estado actualizado a ${status}` });
   } catch (e) {
     console.error('Error en PATCH /api/audit/:id/status:', e);
+    res.status(500).json({ error: 'Error al actualizar estado' });
+  }
+});
+
+// Actualiza estado del asesor buscando por `client_id`.
+// Útil cuando Make solo conoce el id del cliente, pero no el id interno de `audits`.
+app.patch('/api/audit/client/:client_id/status', async (req, res) => {
+  const { client_id } = req.params;
+  const { status } = (req.body ?? {}) as { status?: unknown };
+
+  if (status !== 'accepted' && status !== 'declined') {
+    res.status(400).json({ error: "status debe ser 'accepted' o 'declined'" });
+    return;
+  }
+
+  try {
+    const result = await pool.query(
+      `
+      WITH target AS (
+        SELECT id
+        FROM audits
+        WHERE client_id = $2
+        ORDER BY created_at DESC
+        LIMIT 1
+      )
+      UPDATE audits
+      SET advisor_status = $1
+      WHERE id IN (SELECT id FROM target)
+      RETURNING id
+      `,
+      [status, client_id],
+    );
+
+    if (result.rowCount === 0) {
+      res.status(404).json({ error: 'Auditoria no encontrada para ese client_id' });
+      return;
+    }
+
+    res.json({ ok: true, message: `Estado actualizado a ${status}` });
+  } catch (e) {
+    console.error('Error en PATCH /api/audit/client/:client_id/status:', e);
     res.status(500).json({ error: 'Error al actualizar estado' });
   }
 });

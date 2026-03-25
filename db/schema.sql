@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS opportunity_directory (
 -- Auditorias recibidas por endpoint /api/audit
 CREATE TABLE IF NOT EXISTS audits (
   id BIGSERIAL PRIMARY KEY,
+  client_id TEXT NOT NULL DEFAULT '',
   client_name TEXT NOT NULL DEFAULT '',
   client_email TEXT NOT NULL DEFAULT '',
   client_phone TEXT NOT NULL DEFAULT '',
