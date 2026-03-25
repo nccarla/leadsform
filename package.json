@@ -7,9 +7,11 @@
     "dev": "concurrently -n web,api -c cyan,magenta \"vite\" \"npm run dev:server\"",
     "dev:client": "vite",
     "dev:server": "tsx watch server/index.ts",
-    "build": "tsc && vite build",
+    "build:server": "tsc -p tsconfig.server.json",
+    "build:client": "vite build",
+    "build": "npm run build:server && npm run build:client",
     "preview": "vite preview",
-    "start": "node dist/server/index.js"
+    "start": "node dist-server/server/index.js"
   },
   "dependencies": {
     "cors": "^2.8.5",
