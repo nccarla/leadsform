@@ -2,6 +2,7 @@ import { STAGES, STAGE_COUNT } from './stages';
 import type { AppState, OpportunityForm, StageEntry } from './types';
 import { emptySnapshot, normalizeHistoryRow } from './migrate';
 import { loadState, saveState } from './store';
+import { apiUrl } from './api';
 import { todayIsoDate } from './utils/format';
 import { downloadHistoryCsv } from './utils/historyCsv';
 import { renderStepper, stepIndexFromTarget } from './ui/stepper';
@@ -106,7 +107,7 @@ async function lookupOpportunityAndFill(els: Elements): Promise<void> {
   opportunityLookupLastKey = key;
 
   try {
-    const r = await fetch(`/api/opportunity?number=${encodeURIComponent(key)}`);
+    const r = await fetch(apiUrl(`/api/opportunity?number=${encodeURIComponent(key)}`));
     if (!r.ok) return;
     const d = (await r.json()) as OpportunityDirectory;
     if (!d || typeof d !== 'object') return;
@@ -154,7 +155,7 @@ async function paintHistoryTable(els: Elements, state: AppState): Promise<void> 
   }
 
   try {
-    const r = await fetch(`/api/history?opportunityNumber=${encodeURIComponent(trimmed)}`);
+    const r = await fetch(apiUrl(`/api/history?opportunityNumber=${encodeURIComponent(trimmed)}`));
     if (!r.ok) throw new Error('api');
     const data = (await r.json()) as { entries: unknown[]; total: number };
     const rows = data.entries
@@ -329,7 +330,7 @@ export async function mountApp(): Promise<void> {
 
     // Guarda directorio para autocompletar por nº oportunidad.
     if (snapshot.opportunityNumber.trim()) {
-      void fetch('/api/opportunity', {
+      void fetch(apiUrl('/api/opportunity'), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

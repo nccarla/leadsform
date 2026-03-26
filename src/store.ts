@@ -1,5 +1,6 @@
 import type { AppState } from './types';
 import { migrateAppStateFromUnknown } from './migrate';
+import { apiUrl } from './api';
 
 const STORAGE_KEY_V2 = 'formulario-leads-v2';
 const STORAGE_KEY_V1 = 'formulario-leads-v1';
@@ -38,7 +39,7 @@ function saveStateLocal(state: AppState): void {
 
 async function putStateToServer(state: AppState): Promise<boolean> {
   try {
-    const r = await fetch('/api/state', {
+    const r = await fetch(apiUrl('/api/state'), {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(state),
@@ -59,7 +60,7 @@ function isMeaningfulState(s: AppState): boolean {
 export async function loadState(): Promise<AppState> {
   const local = loadStateLocal();
   try {
-    const r = await fetch('/api/state');
+    const r = await fetch(apiUrl('/api/state'));
     if (!r.ok) throw new Error('bad');
     const server = migrateAppStateFromUnknown(await r.json());
     if (isMeaningfulState(server)) {
