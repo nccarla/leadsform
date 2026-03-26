@@ -243,6 +243,123 @@ app.patch('/api/audit/client/:client_id/status', async (req, res) => {
   }
 });
 
+// Actualiza solo el nombre del asesor (`audits.advisor_name`) para una auditoria.
+// No toca `advisor_status`.
+app.patch('/api/audit/:id/advisor-name', async (req, res) => {
+  const { id } = req.params;
+  const body = (req.body ?? {}) as Record<string, unknown>;
+
+  const rawName =
+    body.advisor_name ?? body.asesor ?? body.advisorName ?? body.name ?? null;
+  const advisorName = rawName == null ? '' : String(rawName).trim();
+
+  if (!advisorName) {
+    res.status(400).json({ error: "Falta advisor_name" });
+    return;
+  }
+
+  try {
+    const result = await pool.query(
+      `
+      UPDATE audits
+      SET advisor_name = $1
+      WHERE id = $2
+      RETURNING id, client_id, client_name, advisor_name, advisor_status, created_at
+      `,
+      [advisorName, id],
+    );
+
+    const row = result.rows[0] as
+      | {
+          id: number;
+          client_id: string;
+          client_name: string;
+          advisor_name: string;
+          advisor_status: string;
+          created_at: string;
+        }
+      | undefined;
+
+    if (!row) {
+      res.status(404).json({ error: 'Auditoria no encontrada' });
+      return;
+    }
+
+    res.json({
+      ok: true,
+      message: 'Advisor name actualizado',
+      id: row.id,
+      client_id: row.client_id,
+      advisor_name: row.advisor_name,
+    });
+  } catch (e) {
+    console.error('Error en PATCH /api/audit/:id/advisor-name:', e);
+    res.status(500).json({ error: 'Error al actualizar el nombre' });
+  }
+});
+
+// Actualiza solo el nombre del asesor (`audits.advisor_name`) buscando por `client_id`.
+// No toca `advisor_status`.
+app.patch('/api/audit/client/:client_id/advisor-name', async (req, res) => {
+  const { client_id } = req.params;
+  const body = (req.body ?? {}) as Record<string, unknown>;
+
+  const rawName =
+    body.advisor_name ?? body.asesor ?? body.advisorName ?? body.name ?? null;
+  const advisorName = rawName == null ? '' : String(rawName).trim();
+
+  if (!advisorName) {
+    res.status(400).json({ error: "Falta advisor_name" });
+    return;
+  }
+
+  try {
+    const result = await pool.query(
+      `
+      WITH target AS (
+        SELECT id
+        FROM audits
+        WHERE client_id = $2
+        ORDER BY created_at DESC
+        LIMIT 1
+      )
+      UPDATE audits
+      SET advisor_name = $1
+      WHERE id IN (SELECT id FROM target)
+      RETURNING id, client_id, client_name, advisor_name, advisor_status, created_at
+      `,
+      [advisorName, client_id],
+    );
+
+    const row = result.rows[0] as
+      | {
+          id: number;
+          client_id: string;
+          client_name: string;
+          advisor_name: string;
+          advisor_status: string;
+          created_at: string;
+        }
+      | undefined;
+
+    if (!row) {
+      res.status(404).json({ error: 'Auditoria no encontrada para ese client_id' });
+      return;
+    }
+
+    res.json({
+      ok: true,
+      message: 'Advisor name actualizado',
+      id: row.id,
+      client_id: row.client_id,
+      advisor_name: row.advisor_name,
+    });
+  } catch (e) {
+    console.error('Error en PATCH /api/audit/client/:client_id/advisor-name:', e);
+    res.status(500).json({ error: 'Error al actualizar el nombre' });
+  }
+});
+
 app.get('/api/state', async (_req, res) => {
   try {
     const { rows } = await pool.query<{ payload: unknown }>(
