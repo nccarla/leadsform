@@ -3,6 +3,7 @@ import { pool } from '../db/index.js';
 export function startMeetingAuditor() {
   console.log('--- Auditor de reuniones activado (Check cada 60s) ---');
   const makeWebhookUrl = process.env.MAKE_WEBHOOK_URL || process.env.MAKE_AUDITOR_WEBHOOK_URL;
+  const overdueGraceMinutes = Number(process.env.AUDITOR_OVERDUE_GRACE_MINUTES ?? '60');
   if (!makeWebhookUrl) {
     console.warn('[Auditor] MAKE_WEBHOOK_URL / MAKE_AUDITOR_WEBHOOK_URL no está configurado; solo se registrarán logs locales.');
   }
@@ -79,9 +80,9 @@ export function startMeetingAuditor() {
         WHERE status IN ('pending', 'alerted')
           AND advisor_status = 'pending'
           AND end_time IS NOT NULL
-          AND end_time <= now()
+          AND end_time <= now() - ($1::int * interval '1 minute')
       `;
-      const { rows: overdueRows } = await pool.query(overdueQuery);
+      const { rows: overdueRows } = await pool.query(overdueQuery, [overdueGraceMinutes]);
 
       for (const meeting of overdueRows) {
         console.log(`[AUDITOR VENCIDO]: Reunión vencida sin respuesta de asesor (${meeting.client_name}).`);
