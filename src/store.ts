@@ -33,7 +33,8 @@ function loadStateLocal(): AppState {
   return defaultState();
 }
 
-function saveStateLocal(state: AppState): void {
+/** Solo guarda en localStorage (sin llamar a la API). */
+export function saveStateLocal(state: AppState): void {
   localStorage.setItem(STORAGE_KEY_V2, JSON.stringify(state));
 }
 

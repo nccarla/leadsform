@@ -1,7 +1,7 @@
 import { STAGES, STAGE_COUNT } from './stages';
 import type { AppState, OpportunityForm, StageEntry } from './types';
 import { emptySnapshot, normalizeHistoryRow } from './migrate';
-import { loadState, saveState } from './store';
+import { loadState, saveState, saveStateLocal } from './store';
 import { apiUrl } from './api';
 import { todayIsoDate } from './utils/format';
 import { downloadHistoryCsv } from './utils/historyCsv';
@@ -97,12 +97,13 @@ function queryElements(): Elements {
   };
 }
 
+/** Guarda el borrador solo en localStorage (sin llamar a la API). */
 function persistDraft(els: Elements, state: AppState): AppState {
   const next: AppState = {
     ...state,
     draft: readOpportunityForm(els.form),
   };
-  saveState(next);
+  saveStateLocal(next);
   return next;
 }
 
@@ -389,18 +390,18 @@ export async function mountApp(): Promise<void> {
     el.addEventListener('change', onDraftChange);
   }
 
-  // Autocompletar cliente/vendedor por nº de oportunidad (debounce).
-  const scheduleOpportunityLookup = () => {
+  // Autocompletar cliente/vendedor por nº de oportunidad (solo al salir del campo o confirmar).
+  const doOpportunityLookup = () => {
     if (opportunityLookupTimer) clearTimeout(opportunityLookupTimer);
     opportunityLookupTimer = setTimeout(() => {
       opportunityLookupTimer = null;
       void lookupOpportunityAndFill(els).then(() => {
         state = persistDraft(els, state);
       });
-    }, 420);
+    }, 300);
   };
-  els.form.opportunityNumber.addEventListener('input', scheduleOpportunityLookup);
-  els.form.opportunityNumber.addEventListener('change', scheduleOpportunityLookup);
+  els.form.opportunityNumber.addEventListener('blur', doOpportunityLookup);
+  els.form.opportunityNumber.addEventListener('change', doOpportunityLookup);
 
   // Autonumeración: al escribir el nombre de oportunidad o al salir del campo,
   // si no hay número, pide uno a PostgreSQL.
@@ -419,8 +420,8 @@ export async function mountApp(): Promise<void> {
   els.form.opportunityName.addEventListener('blur', scheduleAutoNumber);
   els.form.opportunityNumber.addEventListener('focus', scheduleAutoNumber);
 
-  // Al cambiar nº oportunidad, refresca actividades (contador) desde BD.
-  els.form.opportunityNumber.addEventListener('input', () => void refreshActivities(els));
+  // Al confirmar nº oportunidad, refresca actividades (contador) desde BD.
+  els.form.opportunityNumber.addEventListener('blur', () => void refreshActivities(els));
   els.form.opportunityNumber.addEventListener('change', () => void refreshActivities(els));
   void refreshActivities(els);
 
@@ -502,7 +503,7 @@ export async function mountApp(): Promise<void> {
     state = persistDraft(els, state);
     state = { ...state, currentStageIndex: idx };
     syncClosingPercentToStage(els, state.currentStageIndex);
-    saveState(state);
+    saveStateLocal(state);
     fullRender(els, state);
   });
 
@@ -580,7 +581,7 @@ export async function mountApp(): Promise<void> {
     writeOpportunityForm(els.form, emptySnapshot());
     ensureDefaultDates(els);
     updateClosingPercentBar(els.form);
-    saveState(state);
+    saveStateLocal(state);
     fullRender(els, state);
   });
 }
