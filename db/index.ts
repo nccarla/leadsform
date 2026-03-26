@@ -8,7 +8,9 @@ if (!databaseUrl) {
   process.exit(1);
 }
 
+const isLocalhost = databaseUrl.includes('localhost') || databaseUrl.includes('127.0.0.1');
+
 export const pool = new pg.Pool({
   connectionString: databaseUrl,
-  ssl: { rejectUnauthorized: false }
+  ssl: isLocalhost ? false : { rejectUnauthorized: false },
 });
