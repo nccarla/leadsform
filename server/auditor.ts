@@ -2,9 +2,9 @@ import { pool } from '../db/index.js';
 
 export function startMeetingAuditor() {
   console.log('--- Auditor de reuniones activado (Check cada 60s) ---');
-  const makeWebhookUrl = process.env.MAKE_WEBHOOK_URL;
+  const makeWebhookUrl = process.env.MAKE_WEBHOOK_URL || process.env.MAKE_AUDITOR_WEBHOOK_URL;
   if (!makeWebhookUrl) {
-    console.warn('[Auditor] MAKE_WEBHOOK_URL no está configurado; solo se registrarán logs locales.');
+    console.warn('[Auditor] MAKE_WEBHOOK_URL / MAKE_AUDITOR_WEBHOOK_URL no está configurado; solo se registrarán logs locales.');
   }
 
   setInterval(async () => {
@@ -58,6 +58,7 @@ export function startMeetingAuditor() {
             // Si falla el webhook, dejamos pending para reintentar en el siguiente ciclo.
             continue;
           }
+          console.log(`[Auditor] Webhook enviado a Make para auditoria id=${meeting.id}, client_id=${meeting.client_id}`);
         }
 
         // 2. Marcamos como alertada para no repetir
