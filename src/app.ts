@@ -16,6 +16,29 @@ import {
 } from './opportunityForm';
 import { renderStageQuestions, readStageQuestionValues } from './stageQuestions';
 
+/** Envía un evento a la bitácora (POST /api/logs). Fire-and-forget. */
+function logEvent(payload: {
+  opportunityNumber?: string;
+  eventType: string;
+  stageId?: string;
+  fromStage?: string;
+  toStage?: string;
+  sellerName?: string;
+  clientName?: string;
+  description?: string;
+  metadata?: Record<string, unknown>;
+  durationSeconds?: number;
+}): void {
+  void fetch(apiUrl('/api/logs'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  }).catch(() => void 0);
+}
+
+/** Timestamp de cuando se empezó a trabajar en la etapa actual (para calcular duración). */
+let stageEnteredAt: number = Date.now();
+
 function stageAutoClosingPercent(stageIndex: number): number {
   const pct = Math.round(((stageIndex + 1) / STAGE_COUNT) * 100);
   return Math.min(100, Math.max(0, pct));
@@ -485,7 +508,17 @@ export async function mountApp(): Promise<void> {
     if (!id) return;
     if (!confirm('¿Borrar esta actividad?')) return;
     void fetch(`/api/activities/${encodeURIComponent(id)}`, { method: 'DELETE' })
-      .then(() => refreshActivities(els))
+      .then(() => {
+        logEvent({
+          opportunityNumber: els.form.opportunityNumber.value.trim(),
+          eventType: 'activity_deleted',
+          sellerName: els.form.sellerName.value.trim(),
+          clientName: els.form.clientName.value.trim(),
+          description: `Actividad eliminada (id: ${id})`,
+          metadata: { activityId: id },
+        });
+        return refreshActivities(els);
+      })
       .catch(() => void 0);
   });
   els.activitiesForm.addEventListener('submit', (e) => {
@@ -509,6 +542,14 @@ export async function mountApp(): Promise<void> {
       body: JSON.stringify(payload),
     })
       .then(() => {
+        logEvent({
+          opportunityNumber: num,
+          eventType: 'activity_created',
+          sellerName: els.form.sellerName.value.trim(),
+          clientName: els.form.clientName.value.trim(),
+          description: `Actividad creada: "${payload.title}" programada ${payload.scheduledAt}`,
+          metadata: { activityId: payload.id, title: payload.title, scheduledAt: payload.scheduledAt },
+        });
         els.activityTitle.value = '';
         els.activityDatetime.value = '';
         els.activityNotes.value = '';
@@ -532,9 +573,10 @@ export async function mountApp(): Promise<void> {
   els.stepper.addEventListener('click', (e) => {
     const idx = stepIndexFromTarget(e.target);
     if (idx === null) return;
+    const prevIdx = state.currentStageIndex;
     state = persistDraft(els, state);
     state = { ...state, currentStageIndex: idx };
-    // Cargar datos de la etapa desde cache BD si existen.
+    const prevStage = STAGES[prevIdx];
     const newStage = STAGES[idx];
     if (newStage && loadedStageDataCache[newStage.id]) {
       state = { ...state, draft: { ...state.draft, stageData: loadedStageDataCache[newStage.id] } };
@@ -543,6 +585,21 @@ export async function mountApp(): Promise<void> {
     }
     syncClosingPercentToStage(els, state.currentStageIndex);
     saveStateLocal(state);
+    if (idx !== prevIdx) {
+      const elapsed = Math.round((Date.now() - stageEnteredAt) / 1000);
+      logEvent({
+        opportunityNumber: els.form.opportunityNumber.value.trim(),
+        eventType: 'stage_change',
+        stageId: newStage?.id,
+        fromStage: prevStage?.id ?? '',
+        toStage: newStage?.id ?? '',
+        sellerName: els.form.sellerName.value.trim(),
+        clientName: els.form.clientName.value.trim(),
+        description: `Cambió de "${prevStage?.label ?? ''}" a "${newStage?.label ?? ''}"`,
+        durationSeconds: elapsed,
+      });
+      stageEnteredAt = Date.now();
+    }
     fullRender(els, state);
   });
 
@@ -577,10 +634,39 @@ export async function mountApp(): Promise<void> {
       state = { ...state, currentStageIndex: state.currentStageIndex + 1 };
     }
 
+    const submittedStageIdx = STAGES.indexOf(stage);
+    const advancedToNext = els.advanceNext.checked && state.currentStageIndex > submittedStageIdx;
+
     saveState(state);
     setSubmitStatus(els, 'Guardado');
 
-    // Guarda directorio para autocompletar por nº oportunidad.
+    // Log: envío de etapa
+    const elapsed = Math.round((Date.now() - stageEnteredAt) / 1000);
+    logEvent({
+      opportunityNumber: snapshot.opportunityNumber.trim(),
+      eventType: 'stage_submit',
+      stageId: stage.id,
+      sellerName: snapshot.sellerName,
+      clientName: snapshot.clientName,
+      description: `Envió etapa "${stage.label}" — % cierre: ${snapshot.closingPercent}%`,
+      metadata: { closingPercent: snapshot.closingPercent, stageData: currentStageData },
+      durationSeconds: elapsed,
+    });
+
+    if (advancedToNext) {
+      const newStage = STAGES[state.currentStageIndex];
+      logEvent({
+        opportunityNumber: snapshot.opportunityNumber.trim(),
+        eventType: 'stage_advance',
+        fromStage: stage.id,
+        toStage: newStage?.id ?? '',
+        sellerName: snapshot.sellerName,
+        clientName: snapshot.clientName,
+        description: `Avanzó automáticamente de "${stage.label}" a "${newStage?.label ?? ''}"`,
+      });
+      stageEnteredAt = Date.now();
+    }
+
     if (snapshot.opportunityNumber.trim()) {
       void fetch(apiUrl('/api/opportunity'), {
         method: 'PUT',
@@ -594,7 +680,6 @@ export async function mountApp(): Promise<void> {
         }),
       }).catch(() => void 0);
 
-      // Guarda respuestas de preguntas de esta etapa en BD.
       void fetch(apiUrl('/api/stage-data'), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -630,11 +715,24 @@ export async function mountApp(): Promise<void> {
 
   els.btnReset.addEventListener('click', () => {
     if (!confirm('¿Vaciar solo los campos del formulario? El historial y la base de datos no se borran.')) return;
+    const prevOpp = els.form.opportunityNumber.value.trim();
+    const prevSeller = els.form.sellerName.value.trim();
+    const prevClient = els.form.clientName.value.trim();
+    const prevStage = STAGES[state.currentStageIndex];
     state = { ...state, draft: {} };
     writeOpportunityForm(els.form, emptySnapshot());
     ensureDefaultDates(els);
     updateClosingPercentBar(els.form);
     saveStateLocal(state);
+    logEvent({
+      opportunityNumber: prevOpp,
+      eventType: 'form_reset',
+      stageId: prevStage?.id ?? '',
+      sellerName: prevSeller,
+      clientName: prevClient,
+      description: `Formulario reiniciado desde etapa "${prevStage?.label ?? ''}"`,
+    });
+    stageEnteredAt = Date.now();
     fullRender(els, state);
   });
 }

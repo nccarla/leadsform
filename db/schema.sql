@@ -72,3 +72,23 @@ CREATE TABLE IF NOT EXISTS opportunity_stage_data (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   PRIMARY KEY (opportunity_number, stage_id)
 );
+
+-- Bitácora / audit trail de todo lo que pasa con cada oportunidad
+CREATE TABLE IF NOT EXISTS opportunity_logs (
+  id BIGSERIAL PRIMARY KEY,
+  opportunity_number TEXT NOT NULL DEFAULT '',
+  event_type TEXT NOT NULL,
+  stage_id TEXT NOT NULL DEFAULT '',
+  from_stage TEXT NOT NULL DEFAULT '',
+  to_stage TEXT NOT NULL DEFAULT '',
+  seller_name TEXT NOT NULL DEFAULT '',
+  client_name TEXT NOT NULL DEFAULT '',
+  description TEXT NOT NULL DEFAULT '',
+  metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+  duration_seconds INTEGER,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS opportunity_logs_by_opp
+  ON opportunity_logs (opportunity_number, created_at);
+CREATE INDEX IF NOT EXISTS opportunity_logs_by_event
+  ON opportunity_logs (event_type, created_at);

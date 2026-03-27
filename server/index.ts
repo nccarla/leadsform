@@ -101,6 +101,26 @@ async function ensureSchema(): Promise<void> {
     );
   `);
   await pool.query(`
+    CREATE TABLE IF NOT EXISTS opportunity_logs (
+      id BIGSERIAL PRIMARY KEY,
+      opportunity_number TEXT NOT NULL DEFAULT '',
+      event_type TEXT NOT NULL,
+      stage_id TEXT NOT NULL DEFAULT '',
+      from_stage TEXT NOT NULL DEFAULT '',
+      to_stage TEXT NOT NULL DEFAULT '',
+      seller_name TEXT NOT NULL DEFAULT '',
+      client_name TEXT NOT NULL DEFAULT '',
+      description TEXT NOT NULL DEFAULT '',
+      metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+      duration_seconds INTEGER,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS opportunity_logs_by_opp
+      ON opportunity_logs (opportunity_number, created_at);
+    CREATE INDEX IF NOT EXISTS opportunity_logs_by_event
+      ON opportunity_logs (event_type, created_at);
+  `);
+  await pool.query(`
     INSERT INTO lead_app_state (id, payload)
     VALUES (1, $1::jsonb)
     ON CONFLICT (id) DO NOTHING;
@@ -690,6 +710,76 @@ app.put('/api/stage-data', async (req, res) => {
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'no se pudo guardar datos de etapa' });
+  }
+});
+
+/** Registra un evento en la bitácora (audit trail). */
+app.post('/api/logs', async (req, res) => {
+  try {
+    const b = (req.body ?? {}) as Record<string, unknown>;
+    const eventType = String(b.eventType ?? '').trim();
+    if (!eventType) {
+      res.status(400).json({ error: 'Falta eventType' });
+      return;
+    }
+    const result = await pool.query(
+      `INSERT INTO opportunity_logs
+         (opportunity_number, event_type, stage_id, from_stage, to_stage,
+          seller_name, client_name, description, metadata, duration_seconds)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10)
+       RETURNING id, created_at`,
+      [
+        String(b.opportunityNumber ?? '').trim(),
+        eventType,
+        String(b.stageId ?? '').trim(),
+        String(b.fromStage ?? '').trim(),
+        String(b.toStage ?? '').trim(),
+        String(b.sellerName ?? '').trim(),
+        String(b.clientName ?? '').trim(),
+        String(b.description ?? '').trim(),
+        JSON.stringify(b.metadata && typeof b.metadata === 'object' ? b.metadata : {}),
+        b.durationSeconds != null ? Number(b.durationSeconds) : null,
+      ],
+    );
+    const row = result.rows[0] as { id: number; created_at: string };
+    res.json({ ok: true, id: row.id, createdAt: row.created_at });
+  } catch (e) {
+    console.error('Error en POST /api/logs:', e);
+    res.status(500).json({ error: 'No se pudo registrar el log' });
+  }
+});
+
+/** Consulta la bitácora. ?number=X filtra por oportunidad. ?eventType=Y filtra por tipo. ?limit=N (default 200). */
+app.get('/api/logs', async (req, res) => {
+  try {
+    const num = String(req.query.number ?? '').trim();
+    const eventType = String(req.query.eventType ?? '').trim();
+    const limit = Math.min(Math.max(Number(req.query.limit) || 200, 1), 2000);
+
+    let where = 'WHERE 1=1';
+    const params: unknown[] = [];
+    if (num) {
+      params.push(num);
+      where += ` AND opportunity_number = $${params.length}`;
+    }
+    if (eventType) {
+      params.push(eventType);
+      where += ` AND event_type = $${params.length}`;
+    }
+    params.push(limit);
+    const { rows } = await pool.query(
+      `SELECT id, opportunity_number, event_type, stage_id, from_stage, to_stage,
+              seller_name, client_name, description, metadata, duration_seconds, created_at
+       FROM opportunity_logs
+       ${where}
+       ORDER BY created_at DESC
+       LIMIT $${params.length}`,
+      params,
+    );
+    res.json({ entries: rows, count: rows.length });
+  } catch (e) {
+    console.error('Error en GET /api/logs:', e);
+    res.status(500).json({ error: 'No se pudo leer la bitácora' });
   }
 });
 
