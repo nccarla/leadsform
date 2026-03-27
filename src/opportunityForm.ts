@@ -60,7 +60,14 @@ function numOrEmpty(v: string): number | '' {
   return Number.isFinite(n) ? n : '';
 }
 
-export function readOpportunityForm(els: OpportunityFormElements): OpportunityForm {
+/**
+ * Lee el formulario principal. `currentStageData` se inyecta desde app.ts
+ * (leído por stageQuestions.ts) para no acoplar este módulo al DOM dinámico.
+ */
+export function readOpportunityForm(
+  els: OpportunityFormElements,
+  currentStageData?: Record<string, string>,
+): OpportunityForm {
   return {
     clientName: els.clientName.value.trim(),
     clientEmail: els.clientEmail.value.trim(),
@@ -68,7 +75,9 @@ export function readOpportunityForm(els: OpportunityFormElements): OpportunityFo
     sellerName: els.sellerName.value.trim(),
     totalInvoiceAmount: numOrEmpty(els.totalInvoiceAmount.value),
     territory: els.territory.value.trim(),
-    displaySystemCurrency: els.displaySystemCurrency.checked,
+    displaySystemCurrency: els.displaySystemCurrency.type === 'checkbox'
+      ? els.displaySystemCurrency.checked
+      : els.displaySystemCurrency.value === 'true',
     opportunityName: els.opportunityName.value.trim(),
     opportunityNumber: els.opportunityNumber.value.trim(),
     documentStatus: els.documentStatus.value,
@@ -80,6 +89,7 @@ export function readOpportunityForm(els: OpportunityFormElements): OpportunityFo
     relatedDocClass: els.relatedDocClass.value.trim(),
     relatedDocNumber: els.relatedDocNumber.value.trim(),
     notes: els.notes.value.trim(),
+    stageData: currentStageData ?? {},
   };
 }
 
@@ -91,7 +101,13 @@ export function writeOpportunityForm(els: OpportunityFormElements, d: Partial<Op
   if (d.sellerName !== undefined) els.sellerName.value = d.sellerName;
   if (d.totalInvoiceAmount !== undefined) els.totalInvoiceAmount.value = numStr(d.totalInvoiceAmount);
   if (d.territory !== undefined) els.territory.value = d.territory;
-  if (d.displaySystemCurrency !== undefined) els.displaySystemCurrency.checked = d.displaySystemCurrency;
+  if (d.displaySystemCurrency !== undefined) {
+    if (els.displaySystemCurrency.type === 'checkbox') {
+      els.displaySystemCurrency.checked = d.displaySystemCurrency;
+    } else {
+      els.displaySystemCurrency.value = d.displaySystemCurrency ? 'true' : 'false';
+    }
+  }
   if (d.opportunityName !== undefined) els.opportunityName.value = d.opportunityName;
   if (d.opportunityNumber !== undefined) els.opportunityNumber.value = d.opportunityNumber;
   if (d.documentStatus !== undefined) els.documentStatus.value = d.documentStatus;

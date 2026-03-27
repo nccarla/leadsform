@@ -92,6 +92,15 @@ async function ensureSchema(): Promise<void> {
       ON opportunity_activities (opportunity_number, scheduled_at);
   `);
   await pool.query(`
+    CREATE TABLE IF NOT EXISTS opportunity_stage_data (
+      opportunity_number TEXT NOT NULL,
+      stage_id TEXT NOT NULL,
+      data JSONB NOT NULL DEFAULT '{}'::jsonb,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (opportunity_number, stage_id)
+    );
+  `);
+  await pool.query(`
     INSERT INTO lead_app_state (id, payload)
     VALUES (1, $1::jsonb)
     ON CONFLICT (id) DO NOTHING;
@@ -618,6 +627,69 @@ app.get('/api/history', async (req, res) => {
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'no se pudo leer el historial' });
+  }
+});
+
+/** Obtiene datos de etapa para una oportunidad. ?number=X&stage=Y o ?number=X (todas las etapas). */
+app.get('/api/stage-data', async (req, res) => {
+  try {
+    const num = normKey(String(req.query.number ?? ''));
+    if (!num) {
+      res.status(400).json({ error: 'Falta number' });
+      return;
+    }
+    const stageId = String(req.query.stage ?? '').trim();
+    if (stageId) {
+      const { rows } = await pool.query<{ data: unknown }>(
+        `SELECT data FROM opportunity_stage_data WHERE opportunity_number = $1 AND stage_id = $2`,
+        [num, stageId],
+      );
+      res.json({ data: rows[0]?.data ?? {} });
+    } else {
+      const { rows } = await pool.query<{ stage_id: string; data: unknown }>(
+        `SELECT stage_id, data FROM opportunity_stage_data WHERE opportunity_number = $1`,
+        [num],
+      );
+      const byStage: Record<string, unknown> = {};
+      for (const r of rows) byStage[r.stage_id] = r.data;
+      res.json({ stages: byStage });
+    }
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'no se pudo leer datos de etapa' });
+  }
+});
+
+/** Guarda datos de etapa para una oportunidad. Body: { opportunityNumber, stageId, data }. */
+app.put('/api/stage-data', async (req, res) => {
+  try {
+    const body = req.body as Record<string, unknown> | null;
+    if (!body) {
+      res.status(400).json({ error: 'JSON inválido' });
+      return;
+    }
+    const opportunityNumber = normKey(String(body.opportunityNumber ?? ''));
+    const stageId = String(body.stageId ?? '').trim();
+    const data = body.data && typeof body.data === 'object' ? body.data : {};
+
+    if (!opportunityNumber || !stageId) {
+      res.status(400).json({ error: 'Faltan opportunityNumber o stageId' });
+      return;
+    }
+
+    await pool.query(
+      `INSERT INTO opportunity_stage_data (opportunity_number, stage_id, data, updated_at)
+       VALUES ($1, $2, $3::jsonb, now())
+       ON CONFLICT (opportunity_number, stage_id) DO UPDATE SET
+         data = EXCLUDED.data,
+         updated_at = now()`,
+      [opportunityNumber, stageId, JSON.stringify(data)],
+    );
+
+    res.json({ ok: true });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'no se pudo guardar datos de etapa' });
   }
 });
 

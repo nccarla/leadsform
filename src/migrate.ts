@@ -31,6 +31,7 @@ export const emptySnapshot = (): OpportunityForm => ({
   relatedDocClass: '',
   relatedDocNumber: '',
   notes: '',
+  stageData: {},
 });
 
 /** Convierte JSON guardado (incl. claves antiguas) a modelo actual. */
@@ -65,6 +66,15 @@ export function snapshotFromUnknown(raw: unknown): OpportunityForm {
   s.relatedDocClass = str('relatedDocClass');
   s.relatedDocNumber = str('relatedDocNumber');
   s.notes = str('notes');
+
+  if (r.stageData && typeof r.stageData === 'object' && !Array.isArray(r.stageData)) {
+    const sd = r.stageData as Record<string, unknown>;
+    const clean: Record<string, string> = {};
+    for (const [k, v] of Object.entries(sd)) {
+      clean[k] = String(v ?? '');
+    }
+    s.stageData = clean;
+  }
 
   return s;
 }

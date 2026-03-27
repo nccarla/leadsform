@@ -1,8 +1,9 @@
 export type StageId =
   | 'asignacion'
   | 'reunion'
+  | 'construccion'
+  | 'envio'
   | 'seguimiento'
-  | 'propuesta'
   | 'cierre';
 
 /** Instantánea del formulario (se envía completa en cada etapa). Solo ventas. */
@@ -25,6 +26,8 @@ export type OpportunityForm = {
   relatedDocClass: string;
   relatedDocNumber: string;
   notes: string;
+  /** Datos específicos de cada etapa (clave = fieldId, valor = texto). */
+  stageData: Record<string, string>;
 };
 
 export type StageEntry = {

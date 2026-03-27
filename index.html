@@ -156,12 +156,65 @@
         <div class="p-5 sm:p-7 sm:pt-6">
 
         <form id="lead-form" class="min-w-0 space-y-8 sm:space-y-10">
+
+          <!-- Identificación de la oportunidad (siempre visible) -->
+          <div class="form-well">
+            <h3 class="border-b-2 border-brand-navy pb-2 text-xs font-extrabold uppercase tracking-widest text-brand-navy">Identificación de la oportunidad</h3>
+            <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+              <label class="block sm:col-span-2">
+                <span class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-700">Nombre oportunidad</span>
+                <input type="text" id="opportunity-name" required class="input-industrial" placeholder="Título del negocio" />
+              </label>
+              <label class="block">
+                <span class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-700">Nº oportunidad</span>
+                <input type="text" id="opportunity-number" class="input-industrial" placeholder="Ej. 1" />
+              </label>
+              <label class="block">
+                <span class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-700">Estado</span>
+                <select id="document-status" class="input-industrial">
+                  <option value="abierto">Abierto</option>
+                  <option value="cerrado_ganado">Cerrado ganado</option>
+                  <option value="cerrado_perdido">Cerrado perdido</option>
+                  <option value="pausa">En pausa</option>
+                </select>
+              </label>
+            </div>
+            <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+              <label class="block">
+                <span class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-700">Fecha de inicio</span>
+                <input type="date" id="opportunity-start-date" required class="input-industrial bg-brand-surface" />
+              </label>
+              <label class="block">
+                <span class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-700">Fecha de cierre</span>
+                <input type="date" id="opportunity-closing-date" class="input-industrial bg-brand-surface" />
+              </label>
+              <label class="block">
+                <span class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-700">Monto potencial</span>
+                <input type="number" id="potential-amount" min="0" step="0.01" class="input-industrial" placeholder="Importe estimado" />
+              </label>
+              <label class="block">
+                <div class="mb-1.5 flex items-center justify-between gap-3">
+                  <span class="block text-xs font-bold uppercase tracking-wide text-ink-700">Actividades</span>
+                  <button type="button" id="btn-open-activities" class="rounded-sm border border-ink-300 bg-white px-2 py-1 text-[10px] font-extrabold uppercase tracking-widest text-ink-700 hover:bg-brand-surface">Agenda</button>
+                </div>
+                <input type="number" id="open-activities-count" min="0" step="1" class="input-industrial" placeholder="0" readonly />
+              </label>
+            </div>
+            <!-- Campos ocultos que se necesitan internamente -->
+            <input type="hidden" id="closing-percent" name="closingPercent" value="0" />
+            <input type="hidden" id="total-invoice-amount" value="" />
+            <input type="hidden" id="territory" value="" />
+            <input type="hidden" id="display-system-currency" value="" />
+            <input type="hidden" id="related-doc-class" value="" />
+            <input type="hidden" id="related-doc-number" value="" />
+          </div>
+
           <div
             id="lead-grid"
-            class="lead-grid grid min-w-0 items-start gap-6 md:grid-cols-2 md:gap-8 lg:gap-10"
+            class="lead-grid grid min-w-0 items-stretch gap-6 md:grid-cols-2 md:gap-8 lg:gap-10"
           >
             <!-- Columna izquierda: cliente y vendedor (+ Observaciones cuando está oculto) -->
-            <div id="left-stack" class="min-w-0 space-y-6">
+            <div id="left-stack" class="min-w-0 space-y-6 flex flex-col">
               <details id="client-panel" class="form-well" open>
                   <summary class="flex cursor-pointer list-none items-center justify-between gap-3 border-b-2 border-brand-navy pb-2 text-xs font-extrabold uppercase tracking-widest text-brand-navy">
                     <span>Cliente y vendedor</span>
@@ -171,217 +224,53 @@
 
               <label class="block">
                 <span class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-700">Nombre del cliente</span>
-                <input
-                  type="text"
-                  id="client-name"
-                  name="clientName"
-                  required
-                  autocomplete="name"
-                  class="input-industrial-highlight"
-                  placeholder="Nombre o razón social"
-                />
+                <input type="text" id="client-name" name="clientName" required autocomplete="name" class="input-industrial-highlight" placeholder="Nombre o razón social" />
               </label>
 
               <label class="block">
                 <span class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-700">Correo del cliente</span>
-                <input
-                  type="email"
-                  id="client-email"
-                  name="clientEmail"
-                  required
-                  autocomplete="email"
-                  class="input-industrial"
-                  placeholder="correo@ejemplo.com"
-                />
+                <input type="email" id="client-email" name="clientEmail" required autocomplete="email" class="input-industrial" placeholder="correo@ejemplo.com" />
               </label>
 
               <label class="block">
                 <span class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-700">Teléfono del cliente</span>
-                <input
-                  type="tel"
-                  id="client-phone"
-                  name="clientPhone"
-                  required
-                  autocomplete="tel"
-                  class="input-industrial"
-                  placeholder="Ej. +34 600 000 000"
-                />
+                <input type="tel" id="client-phone" name="clientPhone" required autocomplete="tel" class="input-industrial" placeholder="Ej. +34 600 000 000" />
               </label>
 
               <label class="block">
                 <span class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-700">Nombre del vendedor</span>
-                <input
-                  type="text"
-                  id="seller-name"
-                  name="sellerName"
-                  required
-                  autocomplete="name"
-                  class="input-industrial"
-                  placeholder="Comercial asignado"
-                />
-              </label>
-
-              <label class="block">
-                <span class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-700">Importe de factura total</span>
-                <input
-                  type="number"
-                  id="total-invoice-amount"
-                  min="0"
-                  step="0.01"
-                  class="input-industrial"
-                  placeholder="0,00"
-                />
-              </label>
-
-              <label class="block">
-                <span class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-700">Territorio</span>
-                <input
-                  type="text"
-                  id="territory"
-                  class="input-industrial"
-                  placeholder="Zona o territorio"
-                />
-              </label>
-
-              <label class="flex cursor-pointer items-center gap-2 text-sm font-semibold text-ink-800">
-                <input
-                  type="checkbox"
-                  id="display-system-currency"
-                  class="h-4 w-4 rounded-sm border-2 border-ink-400 accent-[#c8151b] focus:ring-2 focus:ring-brand-navy"
-                />
-                Visualizar en moneda del sistema
+                <input type="text" id="seller-name" name="sellerName" required autocomplete="name" class="input-industrial" placeholder="Comercial asignado" />
               </label>
                 </div>
               </details>
-            </div>
 
-            <!-- Columna derecha: oportunidad -->
-            <div id="document-panel" class="form-well doc-panel">
-              <h3 class="border-b-2 border-brand-navy pb-2 text-xs font-extrabold uppercase tracking-widest text-brand-navy">Datos del documento</h3>
-
-              <label class="block">
-                <span class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-700">Nombre oportunidad</span>
-                <input
-                  type="text"
-                  id="opportunity-name"
-                  required
-                  class="input-industrial"
-                  placeholder="Título del negocio"
-                />
-              </label>
-
-              <div class="grid gap-5 sm:grid-cols-2">
-                <label class="block">
-                  <span class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-700">Número de oportunidad</span>
-                  <input
-                    type="text"
-                    id="opportunity-number"
-                    class="input-industrial"
-                    placeholder="Ej. 1"
-                  />
-                </label>
-                <label class="block">
-                  <span class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-700">Estado del documento</span>
-                  <select id="document-status" class="input-industrial">
-                    <option value="abierto">Abierto</option>
-                    <option value="cerrado_ganado">Cerrado ganado</option>
-                    <option value="cerrado_perdido">Cerrado perdido</option>
-                    <option value="pausa">En pausa</option>
-                  </select>
-                </label>
-              </div>
-
-              <div class="grid gap-5 sm:grid-cols-2">
-                <label class="block">
-                  <span class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-700">Fecha de inicio</span>
-                  <input
-                    type="date"
-                    id="opportunity-start-date"
-                    required
-                    class="input-industrial bg-brand-surface"
-                  />
-                </label>
-                <label class="block">
-                  <span class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-700">Fecha de cierre</span>
-                  <input type="date" id="opportunity-closing-date" class="input-industrial bg-brand-surface" />
-                </label>
-              </div>
-
-              <label class="block">
-                <div class="mb-1.5 flex items-center justify-between gap-3">
-                  <span class="block text-xs font-bold uppercase tracking-wide text-ink-700">Actividades abiertas</span>
-                  <button
-                    type="button"
-                    id="btn-open-activities"
-                    class="rounded-sm border border-ink-300 bg-white px-2 py-1 text-[10px] font-extrabold uppercase tracking-widest text-ink-700 hover:bg-brand-surface"
+              <div
+                id="obs-block"
+                class="obs-block flex-1 rounded-sm border-2 border-dashed border-ink-300 bg-white p-4 sm:p-5"
+              >
+                <label class="flex h-full flex-col">
+                  <span class="mb-2 block text-xs font-bold uppercase tracking-wide text-ink-700"
+                    >Observaciones <span class="text-brand-red" title="Campo obligatorio">*</span></span
                   >
-                    Agenda
-                  </button>
-                </div>
-                <input
-                  type="number"
-                  id="open-activities-count"
-                  min="0"
-                  step="1"
-                  class="input-industrial"
-                  placeholder="0"
-                  readonly
-                />
-              </label>
-
-              <input type="hidden" id="closing-percent" name="closingPercent" value="0" />
-
-              <label class="block">
-                <span class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-700">Monto potencial</span>
-                <input
-                  type="number"
-                  id="potential-amount"
-                  min="0"
-                  step="0.01"
-                  class="input-industrial"
-                  placeholder="Importe estimado"
-                />
-              </label>
-
-              <div class="grid gap-5 sm:grid-cols-2">
-                <label class="block">
-                  <span class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-700">Clase de documento</span>
-                  <input
-                    type="text"
-                    id="related-doc-class"
-                    class="input-industrial"
-                    placeholder="Oferta, pedido…"
-                  />
-                </label>
-                <label class="block">
-                  <span class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-700">Número de documento</span>
-                  <input
-                    type="text"
-                    id="related-doc-number"
-                    class="input-industrial"
-                    placeholder="Referencia"
-                  />
+                  <textarea
+                    id="opportunity-notes"
+                    name="opportunityNotes"
+                    rows="3"
+                    required
+                    class="input-industrial flex-1 resize-y min-h-[5rem]"
+                    placeholder="Describe el contexto o acuerdos (obligatorio)"
+                  ></textarea>
                 </label>
               </div>
             </div>
 
-            <div
-              id="obs-block"
-              class="obs-block md:col-span-2 rounded-sm border-2 border-dashed border-ink-300 bg-white p-4 sm:p-5"
-            >
-              <label class="block">
-                <span class="mb-2 block text-xs font-bold uppercase tracking-wide text-ink-700"
-                  >Observaciones <span class="text-brand-red" title="Campo obligatorio">*</span></span
-                >
-                <textarea
-                  id="opportunity-notes"
-                  name="opportunityNotes"
-                  rows="4"
-                  required
-                  class="input-industrial resize-y min-h-[7rem]"
-                  placeholder="Describe el contexto o acuerdos (obligatorio)"
-                ></textarea>
-              </label>
+            <!-- Columna derecha: preguntas de la etapa actual -->
+            <div id="stage-questions-panel" class="form-well doc-panel">
+              <h3
+                id="stage-questions-title"
+                class="border-b-2 border-brand-navy pb-2 text-xs font-extrabold uppercase tracking-widest text-brand-navy"
+              ></h3>
+              <div id="stage-questions-container" class="space-y-4"></div>
             </div>
 
           </div>

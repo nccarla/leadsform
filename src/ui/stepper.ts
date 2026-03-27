@@ -43,7 +43,7 @@ export function renderStepper(
 
     return `
       <div class="flex shrink-0 items-start">
-        <button type="button" ${STEP_INDEX_ATTR}="${i}" class="group flex w-[88px] flex-col items-center gap-1 rounded-sm px-0.5 py-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#c8151b] focus-visible:ring-offset-2 sm:w-[104px] sm:gap-1.5">
+        <button type="button" ${STEP_INDEX_ATTR}="${i}" class="group flex w-[80px] flex-col items-center gap-1 rounded-sm px-0.5 py-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#c8151b] focus-visible:ring-offset-2 sm:w-[100px] md:w-[110px] sm:gap-1.5">
           <span class="${boxState}">${done ? '✓' : s.short}</span>
           <span class="${labelClass}">${s.label}</span>
         </button>

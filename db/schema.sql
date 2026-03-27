@@ -63,3 +63,12 @@ CREATE TABLE IF NOT EXISTS opportunity_activities (
 );
 CREATE INDEX IF NOT EXISTS opportunity_activities_by_opp
   ON opportunity_activities (opportunity_number, scheduled_at);
+
+-- Respuestas de preguntas por etapa, vinculadas a una oportunidad
+CREATE TABLE IF NOT EXISTS opportunity_stage_data (
+  opportunity_number TEXT NOT NULL,
+  stage_id TEXT NOT NULL,
+  data JSONB NOT NULL DEFAULT '{}'::jsonb,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (opportunity_number, stage_id)
+);

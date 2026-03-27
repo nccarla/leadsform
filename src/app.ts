@@ -14,10 +14,10 @@ import {
   writeOpportunityForm,
   type OpportunityFormElements,
 } from './opportunityForm';
+import { renderStageQuestions, readStageQuestionValues } from './stageQuestions';
 
 function stageAutoClosingPercent(stageIndex: number): number {
-  // 5 etapas: 20/40/60/80/100
-  const pct = (stageIndex + 1) * 20;
+  const pct = Math.round(((stageIndex + 1) / STAGE_COUNT) * 100);
   return Math.min(100, Math.max(0, pct));
 }
 
@@ -56,6 +56,9 @@ type Elements = {
   activityDatetime: HTMLInputElement;
   activityNotes: HTMLTextAreaElement;
   submitStatus: HTMLElement;
+  stageQuestionsPanel: HTMLElement;
+  stageQuestionsTitle: HTMLElement;
+  stageQuestionsContainer: HTMLElement;
 };
 
 function queryElements(): Elements {
@@ -94,14 +97,19 @@ function queryElements(): Elements {
     activityDatetime: q<HTMLInputElement>('activity-datetime'),
     activityNotes: q<HTMLTextAreaElement>('activity-notes'),
     submitStatus: q('submit-status'),
+    stageQuestionsPanel: q('stage-questions-panel'),
+    stageQuestionsTitle: q('stage-questions-title'),
+    stageQuestionsContainer: q('stage-questions-container'),
   };
 }
 
 /** Guarda el borrador solo en localStorage (sin llamar a la API). */
 function persistDraft(els: Elements, state: AppState): AppState {
+  const stage = STAGES[state.currentStageIndex];
+  const stageData = stage ? readStageQuestionValues(stage.id) : {};
   const next: AppState = {
     ...state,
-    draft: readOpportunityForm(els.form),
+    draft: readOpportunityForm(els.form, stageData),
   };
   saveStateLocal(next);
   return next;
@@ -127,17 +135,32 @@ function fillIfEmpty(input: HTMLInputElement, value: string): void {
   input.value = value;
 }
 
-async function lookupOpportunityAndFill(els: Elements): Promise<void> {
+/** Cache local de datos de etapa cargados desde BD (por oportunidad). */
+let loadedStageDataCache: Record<string, Record<string, string>> = {};
+
+async function loadAllStageData(oppNumber: string): Promise<Record<string, Record<string, string>>> {
+  if (!oppNumber) return {};
+  try {
+    const r = await fetch(apiUrl(`/api/stage-data?number=${encodeURIComponent(oppNumber)}`));
+    if (!r.ok) return {};
+    const json = (await r.json()) as { stages?: Record<string, Record<string, string>> };
+    return json.stages ?? {};
+  } catch {
+    return {};
+  }
+}
+
+async function lookupOpportunityAndFill(els: Elements, state: AppState): Promise<AppState> {
   const key = els.form.opportunityNumber.value.trim();
-  if (!key) return;
-  if (key === opportunityLookupLastKey) return;
+  if (!key) return state;
+  if (key === opportunityLookupLastKey) return state;
   opportunityLookupLastKey = key;
 
   try {
     const r = await fetch(apiUrl(`/api/opportunity?number=${encodeURIComponent(key)}`));
-    if (!r.ok) return;
+    if (!r.ok) return state;
     const d = (await r.json()) as OpportunityDirectory;
-    if (!d || typeof d !== 'object') return;
+    if (!d || typeof d !== 'object') return state;
     fillIfEmpty(els.form.clientName, d.clientName ?? '');
     fillIfEmpty(els.form.clientEmail, d.clientEmail ?? '');
     fillIfEmpty(els.form.clientPhone, d.clientPhone ?? '');
@@ -145,6 +168,18 @@ async function lookupOpportunityAndFill(els: Elements): Promise<void> {
   } catch {
     /* ignore */
   }
+
+  // Carga datos de todas las etapas para esta oportunidad.
+  loadedStageDataCache = await loadAllStageData(key);
+
+  // Aplica los datos de la etapa actual al formulario.
+  const currentStage = STAGES[state.currentStageIndex];
+  if (currentStage && loadedStageDataCache[currentStage.id]) {
+    state = { ...state, draft: { ...state.draft, stageData: loadedStageDataCache[currentStage.id] } };
+    renderCurrentStageQuestions(els, state);
+  }
+
+  return state;
 }
 
 async function assignOpportunityNumberIfMissing(els: Elements): Promise<void> {
@@ -304,11 +339,25 @@ function scheduleHistoryPaint(els: Elements, state: AppState): void {
   }, 280);
 }
 
+function renderCurrentStageQuestions(els: Elements, state: AppState): void {
+  const stage = STAGES[state.currentStageIndex];
+  if (!stage) return;
+  els.stageQuestionsTitle.textContent = `Preguntas — ${stage.label}`;
+  // Prioridad: draft local > cache BD > vacío.
+  const stageData = state.draft.stageData ?? loadedStageDataCache[stage.id] ?? {};
+  renderStageQuestions(
+    els.stageQuestionsContainer,
+    stage.id,
+    stageData,
+  );
+}
+
 function fullRender(els: Elements, state: AppState): void {
   syncClosingPercentToStage(els, state.currentStageIndex);
   renderStepper(els.stepper, state.currentStageIndex, stepperPreviousRenderedIndex);
   stepperPreviousRenderedIndex = state.currentStageIndex;
   updateStagePanel(els, state);
+  renderCurrentStageQuestions(els, state);
   void paintHistoryTable(els, state);
 }
 
@@ -325,7 +374,7 @@ function setSubmitStatus(els: Elements, msg: string): void {
 }
 
 function cloneSnapshot(form: OpportunityForm): OpportunityForm {
-  return { ...form };
+  return { ...form, stageData: { ...form.stageData } };
 }
 
 function ensureDefaultDates(els: Elements): void {
@@ -343,41 +392,23 @@ export async function mountApp(): Promise<void> {
   ensureDefaultDates(els);
   fullRender(els, state);
 
-  const syncObservationsPlacement = () => {
-    // Abierto: Observaciones a ancho completo debajo de ambas columnas.
-    if (els.clientPanel.open) {
-      if (els.obsBlock.parentElement !== els.leadGrid) {
-        els.leadGrid.appendChild(els.obsBlock);
-      }
-      els.obsBlock.classList.add('md:col-span-2');
-      return;
-    }
-    // Cerrado: Observaciones debajo de Clientes (columna izquierda).
-    if (els.obsBlock.parentElement !== els.leftStack) {
-      els.leftStack.appendChild(els.obsBlock);
-    }
-    els.obsBlock.classList.remove('md:col-span-2');
-  };
-  syncObservationsPlacement();
-  els.clientPanel.addEventListener('toggle', syncObservationsPlacement);
+  // Observaciones siempre debajo de Cliente (columna izquierda) para evitar huecos.
+  if (els.obsBlock.parentElement !== els.leftStack) {
+    els.leftStack.appendChild(els.obsBlock);
+  }
+  els.obsBlock.classList.remove('md:col-span-2');
 
   const formInputs: HTMLElement[] = [
     els.form.clientName,
     els.form.clientEmail,
     els.form.clientPhone,
     els.form.sellerName,
-    els.form.totalInvoiceAmount,
-    els.form.territory,
-    els.form.displaySystemCurrency,
     els.form.opportunityName,
     els.form.opportunityNumber,
     els.form.documentStatus,
     els.form.opportunityStartDate,
     els.form.opportunityClosingDate,
-    els.form.openActivitiesCount,
     els.form.potentialAmount,
-    els.form.relatedDocClass,
-    els.form.relatedDocNumber,
     els.form.notes,
   ];
 
@@ -395,7 +426,8 @@ export async function mountApp(): Promise<void> {
     if (opportunityLookupTimer) clearTimeout(opportunityLookupTimer);
     opportunityLookupTimer = setTimeout(() => {
       opportunityLookupTimer = null;
-      void lookupOpportunityAndFill(els).then(() => {
+      void lookupOpportunityAndFill(els, state).then((s) => {
+        state = s;
         state = persistDraft(els, state);
       });
     }, 300);
@@ -502,6 +534,13 @@ export async function mountApp(): Promise<void> {
     if (idx === null) return;
     state = persistDraft(els, state);
     state = { ...state, currentStageIndex: idx };
+    // Cargar datos de la etapa desde cache BD si existen.
+    const newStage = STAGES[idx];
+    if (newStage && loadedStageDataCache[newStage.id]) {
+      state = { ...state, draft: { ...state.draft, stageData: loadedStageDataCache[newStage.id] } };
+    } else {
+      state = { ...state, draft: { ...state.draft, stageData: {} } };
+    }
     syncClosingPercentToStage(els, state.currentStageIndex);
     saveStateLocal(state);
     fullRender(els, state);
@@ -514,9 +553,12 @@ export async function mountApp(): Promise<void> {
     // % cierre automático en función de la etapa actual.
     syncClosingPercentToStage(els, state.currentStageIndex);
 
-    const snapshot = cloneSnapshot(readOpportunityForm(els.form));
     const stage = STAGES[state.currentStageIndex];
     if (!stage) return;
+    const currentStageData = readStageQuestionValues(stage.id);
+    // Actualiza cache local para que al cambiar etapa se vean los datos.
+    loadedStageDataCache[stage.id] = currentStageData;
+    const snapshot = cloneSnapshot(readOpportunityForm(els.form, currentStageData));
 
     const entry: StageEntry = {
       id: crypto.randomUUID(),
@@ -549,6 +591,17 @@ export async function mountApp(): Promise<void> {
           clientEmail: snapshot.clientEmail,
           clientPhone: snapshot.clientPhone,
           sellerName: snapshot.sellerName,
+        }),
+      }).catch(() => void 0);
+
+      // Guarda respuestas de preguntas de esta etapa en BD.
+      void fetch(apiUrl('/api/stage-data'), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          opportunityNumber: snapshot.opportunityNumber.trim(),
+          stageId: stage.id,
+          data: currentStageData,
         }),
       }).catch(() => void 0);
     }
